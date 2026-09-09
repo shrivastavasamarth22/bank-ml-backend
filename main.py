@@ -5,41 +5,42 @@ import numpy as np
 import joblib
 import shap
 import io
+import builtins
 
 app = FastAPI(title="Bank Telemarketing XAI Engine")
 
+# Allow requests from your Vercel frontend and local development server
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[
+        "https://xai-bank-analyzer.vercel.app", # Your live Vercel frontend
+        "http://localhost:3000"                 # For local Next.js testing
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
 print("Loading Machine Learning Artifacts...")
-# We load the preprocessor, model, and feature names.
-# (Ignore the Scikit-learn/XGBoost warnings in the console, they are non-fatal version notices).
 preprocessor = joblib.load('preprocessor.joblib')
 model = joblib.load('tuned_xgb_model.joblib')
 feature_names = joblib.load('feature_names.joblib')
 
-print("Initializing SHAP Explainer dynamically to prevent Numba crashes...")
-# Rebuild the explainer natively here instead of loading a fragile pickle file
+print("Initializing SHAP Explainer dynamically to prevent crashes...")
+
 # --- XGBoost 3.1+ SHAP Bug Fix ---
-import builtins
 _original_float = builtins.float
 
 def _patched_float(val):
-    # If the value is a string with brackets, strip them out
     if isinstance(val, str) and val.startswith('[') and val.endswith(']'):
         val = val[1:-1]
     return _original_float(val)
 
-# Apply the patch, build the explainer, then restore normal behavior
 builtins.float = _patched_float
 explainer = shap.TreeExplainer(model)
 builtins.float = _original_float
 # ---------------------------------
+
 print("API is ready.")
 
 @app.get("/")
