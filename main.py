@@ -25,7 +25,21 @@ feature_names = joblib.load('feature_names.joblib')
 
 print("Initializing SHAP Explainer dynamically to prevent Numba crashes...")
 # Rebuild the explainer natively here instead of loading a fragile pickle file
+# --- XGBoost 3.1+ SHAP Bug Fix ---
+import builtins
+_original_float = builtins.float
+
+def _patched_float(val):
+    # If the value is a string with brackets, strip them out
+    if isinstance(val, str) and val.startswith('[') and val.endswith(']'):
+        val = val[1:-1]
+    return _original_float(val)
+
+# Apply the patch, build the explainer, then restore normal behavior
+builtins.float = _patched_float
 explainer = shap.TreeExplainer(model)
+builtins.float = _original_float
+# ---------------------------------
 print("API is ready.")
 
 @app.get("/")
